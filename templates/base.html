@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{% block title %}TEAM MANAGEMENT PORTAL{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
+    {% block extra_head %}{% endblock %}
+  </head>
+  <body class="{% block body_class %}{% endblock %}">
+    <div class="wrap{% if hide_nav|default(false) %} wrap-portal{% endif %}">
+      <header class="site{% if hide_nav|default(false) %} site-portal{% endif %}">
+        <div class="brand">
+          {% if hide_nav|default(false) %}
+            <a href="{{ url_for('home') }}" class="site-mark" style="display: flex; align-items: center; letter-spacing: 0.12em; font-weight: 700;">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="margin-right: 0.5rem;">
+                <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M2 12L12 17L22 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M2 17L12 22L22 17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              TEAM PORTAL
+            </a>
+          {% else %}
+            <h1>
+              <a href="{% if manager_logged_in %}{{ url_for('scrum') }}{% else %}{{ url_for('home') }}{% endif %}" style="display: flex; align-items: center; letter-spacing: 0.12em; font-weight: 700;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="margin-right: 0.5rem;">
+                  <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M2 12L12 17L22 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M2 17L12 22L22 17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                TEAM PORTAL
+              </a>
+            </h1>
+          {% endif %}
+          {% if manager_logged_in %}
+            <p class="userbar">
+              <span class="userbar-status">{{ manager_nav_label }}</span>
+              <form method="post" action="{{ url_for('manager_logout') }}" class="inline-form">
+                {% include "partials/csrf.html" %}
+                <button type="submit" class="btn secondary small">Sign out</button>
+              </form>
+            </p>
+          {% endif %}
+        </div>
+        {% if not hide_nav|default(false) %}
+        <nav class="main-nav" aria-label="Main">
+          <a
+            href="{% if manager_logged_in %}{{ url_for('scrum') }}{% else %}{{ url_for('home') }}{% endif %}"
+            class="active"
+            >Home</a>
+          <a href="{{ url_for('leave_apply') }}">Apply-Leave</a>
+          <a href="{{ url_for('my_requests') }}">My Leave Status</a>
+            {% if manager_logged_in %}
+            <a href="{{ url_for('dashboard') }}">Leave tracker</a>
+            <a href="{{ url_for('scrum') }}">ScrumBoard</a>
+            <a href="{{ url_for('scrum_hppm_entry') }}">HPPM view</a>
+            <a href="{{ url_for('meet') }}">DSM-Attendance</a>
+            <a href="{{ url_for('reports') }}">Settings</a>
+            {% block nav_team_picker %}
+              {% if manager_teams %}
+                {% set tp_prefix = "" %}
+                {% include "partials/team_picker_cluster.html" %}
+              {% endif %}
+            {% endblock %}
+          {% endif %}
+        </nav>
+        {% endif %}
+      </header>
+
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          <div class="flash-stack" role="status">
+            {% for category, message in messages %}
+              <div class="flash {{ category }}">{{ message }}</div>
+            {% endfor %}
+          </div>
+        {% endif %}
+      {% endwith %}
+
+      <main class="main-content">
+        {% block content %}{% endblock %}
+      </main>
+    </div>
+    {% block scripts %}{% endblock %}
+    <script>
+      function confirmDeleteTeam(event, teamName) {
+        var confirmation = prompt("To delete this team, please type its name exactly: " + teamName);
+        if (confirmation !== teamName) {
+          event.preventDefault();
+          if (confirmation !== null) {
+            alert("Team name did not match. Deletion cancelled.");
+          }
+          return false;
+        }
+        return true;
+      }
+      
+      (function () {
+        function wireTeamPicker(openId, dialogId) {
+          var openBtn = document.getElementById(openId);
+          var dlg = document.getElementById(dialogId);
+          if (!openBtn || !dlg) return;
+          if (typeof dlg.showModal !== "function") {
+            openBtn.style.display = "none";
+            return;
+          }
+          var closeBtn = dlg.querySelector(".team-picker-close");
+          function setOpen(exp) {
+            openBtn.setAttribute("aria-expanded", exp ? "true" : "false");
+          }
+          openBtn.addEventListener("click", function () {
+            dlg.showModal();
+            setOpen(true);
+          });
+          function closeDlg() {
+            if (dlg.open) dlg.close();
+            setOpen(false);
+          }
+          if (closeBtn) closeBtn.addEventListener("click", closeDlg);
+          dlg.addEventListener("cancel", function () {
+            setOpen(false);
+          });
+          dlg.addEventListener("close", function () {
+            setOpen(false);
+          });
+          dlg.addEventListener("click", function (e) {
+            if (e.target === dlg) closeDlg();
+          });
+        }
+        wireTeamPicker("team-picker-open", "team-picker-dialog");
+        wireTeamPicker("scrum-hub-team-picker-open", "scrum-hub-team-picker-dialog");
+      })();
+    </script>
+  </body>
+</html>

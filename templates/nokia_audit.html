@@ -1,0 +1,374 @@
+{% extends "base.html" %}
+{% block title %}Nokia e-tool — {{ active_team_name or "Team" }}{% endblock %}
+{% block extra_head %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='nokia_audit.css') }}" />
+{% endblock %}
+{% block content %}
+<section class="card nokia-audit-intro">
+  <h2 class="page-heading">Nokia e-tool vs leave tracker</h2>
+  <p class="meet-hint">
+    <a class="btn secondary" href="{{ url_for('dashboard', year=year, month=month) }}">Back to leave tracker</a>
+    <a class="btn secondary" href="{{ url_for('reports') }}">Settings</a>
+  </p>
+</section>
+
+<section class="card">
+  <form
+    id="nokia-audit-form"
+    method="post"
+    action="{{ url_for('nokia_audit') }}"
+    class="stack-form nokia-audit-form"
+  >
+    {% include "partials/csrf.html" %}
+    <input type="hidden" name="compare_mode" value="employee_summary" />
+    <input type="hidden" name="year" value="{{ year }}" />
+    <input type="hidden" name="month" value="{{ month }}" />
+
+    <h3 class="nokia-step-title">Nokia e-tool — Employee leave approved text</h3>
+
+    <div class="field nokia-employee-pick" id="nokia-employee-pick">
+      <label for="employee_name">Employee (roster name)</label>
+      <select id="employee_name" name="employee_name" required aria-label="Employee for Nokia eLeave compare">
+        <option value="">— Select —</option>
+        {% for name in roster_names %}
+          <option value="{{ name }}" {% if name == employee_name %}selected{% endif %}>{{ name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="field nokia-csv-field">
+      <label for="nokia_csv">Paste Nokia eLeave text</label>
+      <p class="meet-hint" style="margin: 0 0 0.35rem">
+        Use the same person as in <strong>Employee (roster name)</strong>. Nokia rows usually end with that employee’s
+        name — if that name is not the same as the dropdown selection, Show / Mark actions will stop with an error so you can
+        fix the copy before continuing.
+      </p>
+      <textarea
+        id="nokia_csv"
+        name="nokia_csv"
+        class="nokia-csv-textarea nokia-approved-textarea"
+        rows="10"
+        spellcheck="false"
+        placeholder="Copy from Nokia eLeave (Approved rows, From / To dates)…"
+      >{{ csv_paste_value }}</textarea>
+    </div>
+
+    <div class="form-actions nokia-audit-actions">
+      <button type="submit" name="audit_action" value="show_approved" class="btn">Show Approved Leaves</button>
+      <button type="submit" name="audit_action" value="show_dsm" class="btn secondary">Show DSM Leaves</button>
+      <button type="submit" name="audit_action" value="compare" class="btn secondary">Compare</button>
+      <button type="submit" name="audit_action" value="mark_approved" class="btn secondary">Mark Approved leave in Leave tracker</button>
+      <button type="button" class="btn secondary" id="nokia-clear-text">Clear text</button>
+    </div>
+    <p class="meet-hint" style="margin: 0.35rem 0 0; font-size: 0.85rem">
+      After you change the pasted text, click <strong>Show Approved Leaves</strong> again so the table matches what will be written;
+      <strong>Mark Approved leave in Leave tracker</strong> then applies the same rows (until you change the paste or employee).
+      <strong>Mark Approved</strong> only creates or tags leave on <strong>Monday–Friday</strong> (Saturday/Sunday in a pasted range are skipped).
+      <strong>Show DSM Leaves</strong> loads pending and approved rows on the Leave tracker for the selected employee across the <strong>full calendar year</strong> of the year field above (same columns as the table below; leave type uses PL/UL/SL/LL, half-day ½, and A for Nokia-approved rows, matching the month grid).
+      <strong>Compare</strong> merges the last successful <strong>Show Approved Leaves</strong> preview with the last <strong>Show DSM Leaves</strong> load for this employee and calendar year, with leave types side by side.
+    </p>
+  </form>
+</section>
+
+<section
+  id="nokia-aprooved-eleave-section"
+  class="card nokia-analysis-card"
+  tabindex="-1"
+  role="region"
+  aria-labelledby="nokia-aprooved-eleave-heading"
+>
+  <div class="nokia-audit-analysis-heading-row">
+  <h3 class="page-heading nokia-audit-analysis-heading" id="nokia-aprooved-eleave-heading">
+    {% if compare_submitted %}Compare — eLeave tool vs DSM{% elif dsm_tracker_submitted %}Leave tracker — DSM leaves{% else %}Aprooved eLeave in Tool{% endif %}
+  </h3>
+  {% if compare_submitted and employee_name %}
+    <a
+      class="btn secondary nokia-compare-xlsx-btn"
+      href="{{ url_for('nokia_audit_compare_xlsx', year=year, month=month, employee_name=employee_name) }}"
+    >Download .xlsx</a>
+  {% endif %}
+  </div>
+
+  {% if compare_submitted %}
+    <p class="meet-hint" style="margin: 0 0 0.75rem">
+      Merged view: rows are paired when <strong>Leave dates</strong> overlap (calendar days). <strong>eLeavetool Type</strong> is from the last Show Approved Leaves preview (planned/annual leave is shown as <strong>A</strong> for one day and <strong>A1/2</strong> for a half day); <strong>Type of leave DSM</strong> is from the last Show DSM Leaves load for calendar year <strong>{{ year }}</strong>.
+    </p>
+    <div class="table-scroll">
+      <table
+        id="nokia-compare-table"
+        class="nokia-marked-summary nokia-compare-table"
+        tabindex="-1"
+      >
+        <thead>
+          <tr>
+            <th>NAME</th>
+            <th>No. of Days (eTool)</th>
+            <th>No. of Days (DSM)</th>
+            <th>eLeavetool Type</th>
+            <th>Type of leave DSM</th>
+            <th>Leave dates (eTool)</th>
+            <th>Leave dates (DSM)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% if compare_rows %}
+            {% for row in compare_rows %}
+              <tr>
+                <td>{{ row.name }}</td>
+                <td>{{ row.days_elv }}</td>
+                <td>{{ row.days_dsm }}</td>
+                <td>{{ row.type_elv }}</td>
+                <td>{{ row.type_dsm }}</td>
+                <td>{{ row.dates_elv }}</td>
+                <td>{{ row.dates_dsm }}</td>
+              </tr>
+            {% endfor %}
+          {% else %}
+            <tr>
+              <td colspan="7" class="nokia-dsm-empty">No rows to compare (both sources were empty).</td>
+            </tr>
+          {% endif %}
+        </tbody>
+        <tfoot>
+          <tr class="nokia-days-total-row">
+            <td><strong>TOTAL</strong></td>
+            <td><strong>{{ "%.2f"|format(compare_days_elv_total) }}</strong></td>
+            <td><strong>{{ "%.2f"|format(compare_days_dsm_total) }}</strong></td>
+            <td colspan="4"></td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  {% elif dsm_tracker_submitted %}
+    <p class="meet-hint" style="margin: 0 0 0.75rem">
+      Pending and approved records for <strong>calendar year {{ year }}</strong> from Leave tracker (all months). Types match the month grid (PL/UL/SL/LL, half-day ½, Nokia-approved <strong>A</strong>).
+    </p>
+    <div class="table-scroll">
+      <table
+        id="nokia-dsm-leaves-table"
+        class="nokia-marked-summary nokia-eleave-paste-table"
+        tabindex="-1"
+      >
+        <thead>
+          <tr>
+            <th>NAME</th>
+            <th>No. of Days</th>
+            <th>Type of Leave</th>
+            <th>Status of leaves</th>
+            <th>Leave dates (From → To)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% if dsm_tracker_rows %}
+            {% for row in dsm_tracker_rows %}
+              <tr>
+                <td>{{ row.name }}</td>
+                <td>{{ row.days }}</td>
+                <td>{{ row.type }}</td>
+                <td>{{ row.status }}</td>
+                <td>{{ row.dates_range }}</td>
+              </tr>
+            {% endfor %}
+          {% else %}
+            <tr>
+              <td colspan="5" class="nokia-dsm-empty">No pending or approved leave in Leave tracker for calendar year {{ year }}.</td>
+            </tr>
+          {% endif %}
+        </tbody>
+        <tfoot>
+          <tr class="nokia-days-total-row">
+            <td><strong>TOTAL</strong></td>
+            <td><strong>{{ "%.2f"|format(dsm_tracker_days_total) }}</strong></td>
+            <td colspan="3"></td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  {% elif tracker_approved_submitted and tracker_approved_rows %}
+    <div class="table-scroll">
+      <table
+        id="nokia-eleave-paste-table"
+        class="nokia-marked-summary nokia-eleave-paste-table"
+        tabindex="-1"
+      >
+        <thead>
+          <tr>
+            <th>NAME</th>
+            <th>No. of Days</th>
+            <th>Type of Leave</th>
+            <th>Status of leaves</th>
+            <th>Leave dates (From → To)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in tracker_approved_rows %}
+            <tr>
+              <td>{{ row.name }}</td>
+              <td>{{ row.days }}</td>
+              <td>{{ row.type }}</td>
+              <td>{{ row.status }}</td>
+              <td>{{ row.dates_range }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot>
+          <tr class="nokia-days-total-row">
+            <td><strong>TOTAL</strong></td>
+            <td><strong>{{ "%.2f"|format(tracker_approved_days_total) }}</strong></td>
+            <td colspan="3"></td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  {% elif marked_rows %}
+    <p class="meet-hint">Leave records added from your last <strong>Mark Approved leave in Leave tracker</strong> action.</p>
+    <div class="table-scroll">
+      <table id="nokia-marked-summary-table" class="nokia-marked-summary">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>No. of days</th>
+            <th>Type of leave</th>
+            <th>Status of leave</th>
+            <th>Leave dates (From → To)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in marked_rows %}
+            <tr>
+              <td>{{ row.name }}</td>
+              <td>{{ row.days }}</td>
+              <td>{{ row.type }}</td>
+              <td>{{ row.status }}</td>
+              <td>{{ row.dates_range or row.period or "—" }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot>
+          <tr class="nokia-days-total-row">
+            <td><strong>TOTAL</strong></td>
+            <td><strong>{{ "%.2f"|format(marked_rows_days_total) }}</strong></td>
+            <td colspan="3"></td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  {% else %}
+    {% if parse_error %}
+      <div class="flash error" role="alert">{{ parse_error }}</div>
+    {% endif %}
+  {% endif %}
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  (function () {
+    var clearTextBtn = document.getElementById("nokia-clear-text");
+    var ta = document.getElementById("nokia_csv");
+    if (clearTextBtn && ta) {
+      clearTextBtn.addEventListener("click", function () {
+        ta.value = "";
+        ta.focus();
+      });
+    }
+    {% if compare_submitted %}
+    function scrollToCompareTable() {
+      var table = document.getElementById("nokia-compare-table");
+      var section = document.getElementById("nokia-aprooved-eleave-section");
+      var target = table || section;
+      if (!target) return;
+      target.scrollIntoView({ behavior: "smooth", block: "start" });
+      if (section) {
+        try {
+          section.focus({ preventScroll: true });
+        } catch (e) {
+          try {
+            section.focus();
+          } catch (e2) {}
+        }
+      }
+    }
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", function () {
+        requestAnimationFrame(scrollToCompareTable);
+      });
+    } else {
+      requestAnimationFrame(scrollToCompareTable);
+    }
+    {% elif dsm_tracker_submitted %}
+    function scrollToDsmTable() {
+      var table = document.getElementById("nokia-dsm-leaves-table");
+      var section = document.getElementById("nokia-aprooved-eleave-section");
+      var target = table || section;
+      if (!target) return;
+      target.scrollIntoView({ behavior: "smooth", block: "start" });
+      if (section) {
+        try {
+          section.focus({ preventScroll: true });
+        } catch (e) {
+          try {
+            section.focus();
+          } catch (e2) {}
+        }
+      }
+    }
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", function () {
+        requestAnimationFrame(scrollToDsmTable);
+      });
+    } else {
+      requestAnimationFrame(scrollToDsmTable);
+    }
+    {% elif tracker_approved_submitted and tracker_approved_rows %}
+    function scrollToEleaveTable() {
+      var table = document.getElementById("nokia-eleave-paste-table");
+      var section = document.getElementById("nokia-aprooved-eleave-section");
+      var target = table || section;
+      if (!target) return;
+      target.scrollIntoView({ behavior: "smooth", block: "start" });
+      if (section) {
+        try {
+          section.focus({ preventScroll: true });
+        } catch (e) {
+          try {
+            section.focus();
+          } catch (e2) {}
+        }
+      }
+    }
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", function () {
+        requestAnimationFrame(scrollToEleaveTable);
+      });
+    } else {
+      requestAnimationFrame(scrollToEleaveTable);
+    }
+    {% elif marked_rows %}
+    function scrollToMarkedSummary() {
+      var table = document.getElementById("nokia-marked-summary-table");
+      var section = document.getElementById("nokia-aprooved-eleave-section");
+      var target = table || section;
+      if (!target) return;
+      target.scrollIntoView({ behavior: "smooth", block: "start" });
+      if (section) {
+        try {
+          section.focus({ preventScroll: true });
+        } catch (e) {
+          try {
+            section.focus();
+          } catch (e2) {}
+        }
+      }
+    }
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", function () {
+        requestAnimationFrame(scrollToMarkedSummary);
+      });
+    } else {
+      requestAnimationFrame(scrollToMarkedSummary);
+    }
+    {% endif %}
+  })();
+</script>
+{% endblock %}

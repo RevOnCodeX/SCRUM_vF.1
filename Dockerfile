@@ -11,12 +11,11 @@ ENV FLASK_RUN_PORT=5000
 ENV FLASK_DEBUG=0
 ENV TEAM_TRACKER_DB_PATH=/app/data/team_tracker.db
 
-COPY requirements.txt requirements-deploy.txt .
+COPY requirements.txt requirements-deploy.txt ./
 RUN pip install --no-cache-dir -r requirements-deploy.txt
 
-COPY app.py wsgi.py .
-COPY static ./static
-COPY templates ./templates
+# Copy all source files
+COPY . .
 
 EXPOSE 5000
 

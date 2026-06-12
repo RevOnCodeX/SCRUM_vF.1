@@ -1,5 +1,9 @@
 """WSGI entry for Gunicorn / production hosts: `gunicorn wsgi:app`."""
 import os
+import sys
+
+# Ensure the app directory is explicitly in the Python path
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from app import create_app
 from firestore_sync import init_sync_engine
 

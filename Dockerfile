@@ -17,6 +17,9 @@ RUN pip install --no-cache-dir -r requirements-deploy.txt
 # Copy all source files
 COPY . .
 
+# Ensure the data directory exists for SQLite
+RUN mkdir -p /app/data
+
 EXPOSE 5000
 
 CMD ["gunicorn", "--bind", "0.0.0.0:5000", "wsgi:app"]

@@ -69,6 +69,34 @@ class FirestoreSyncEngine:
         conn.commit()
         conn.close()
 
+    def bootstrap_from_firestore(self):
+        """If SQLite is empty, populate it from Firestore."""
+        conn = sqlite3.connect(self.db_path)
+        cur = conn.cursor()
+        
+        cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name != '_sync_queue'")
+        tables = [r[0] for r in cur.fetchall()]
+        
+        for table in tables:
+            cur.execute(f"SELECT COUNT(*) FROM {table}")
+            count = cur.fetchone()[0]
+            if count == 0:
+                print(f"Bootstrapping {table} from Firestore...")
+                docs = self.firestore_db.collection(table).stream()
+                for doc in docs:
+                    data = doc.to_dict()
+                    if not data: continue
+                    # Insert into sqlite
+                    columns = ', '.join(data.keys())
+                    placeholders = ', '.join(['?'] * len(data))
+                    values = tuple(data.values())
+                    try:
+                        cur.execute(f"INSERT OR REPLACE INTO {table} ({columns}) VALUES ({placeholders})", values)
+                    except Exception as e:
+                        print(f"Failed to bootstrap doc {doc.id} in {table}: {e}")
+        conn.commit()
+        conn.close()
+
     def process_queue(self):
         """Process the sync queue and push changes to Firestore."""
         if not self.sync_lock.acquire(blocking=False):
@@ -128,6 +156,7 @@ def init_sync_engine(db_path):
     if sync_engine is None:
         sync_engine = FirestoreSyncEngine(db_path)
         sync_engine.setup_triggers()
+        sync_engine.bootstrap_from_firestore()
         
 def get_sync_engine():
     return sync_engine

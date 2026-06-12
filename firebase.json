@@ -1,0 +1,20 @@
+{
+  "functions": {
+    "source": ".",
+    "runtime": "python310"
+  },
+  "hosting": {
+    "public": "static",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "function": "scrum_board"
+      }
+    ]
+  }
+}

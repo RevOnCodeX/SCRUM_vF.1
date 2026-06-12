@@ -2205,6 +2205,13 @@ def _db_path(app: Flask) -> Path:
 def get_db(app: Flask) -> sqlite3.Connection:
     p = _db_path(app)
     p.parent.mkdir(parents=True, exist_ok=True)
+    
+    try:
+        from firestore_sync import init_sync_engine
+        init_sync_engine(str(p))
+    except Exception as e:
+        print(f"Firestore Sync Init Error: {e}")
+        
     conn = sqlite3.connect(p)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
@@ -8558,6 +8565,17 @@ def create_app() -> Flask:
     _fill_empty_env_from_dotenv_file(_app_root / ".env")
 
     app = Flask(__name__)
+
+    @app.after_request
+    def process_firestore_sync(response):
+        try:
+            from firestore_sync import get_sync_engine
+            engine = get_sync_engine()
+            if engine:
+                engine.process_queue()
+        except Exception as e:
+            pass
+        return response
     app.config["SECRET_KEY"] = os.environ.get("FLASK_SECRET_KEY") or "dev-only-change-with-FLASK_SECRET_KEY"
     app.config["DB_PATH"] = os.environ.get("TEAM_TRACKER_DB_PATH", str(DB_DEFAULT))
     # Default "team" when unset (local use). Set MANAGER_DASHBOARD_PASSWORD in .env for production.
@@ -9762,8 +9780,23 @@ def create_app() -> Flask:
 
     @app.route("/manager/login", methods=["GET", "POST"])
     def manager_login():
-        """Legacy URL — forwards to /dashboard (307 keeps POST body for old bookmarks)."""
+        """Firebase Token login for manager."""
         if request.method == "POST":
+            # Assume frontend sends an ID token
+            token = request.form.get("id_token")
+            if token:
+                from firebase_setup import get_auth
+                try:
+                    decoded_token = get_auth().verify_id_token(token)
+                    email = decoded_token.get("email", "")
+                    if email == "aakshaj07@gmail.com":
+                        session["manager"] = True
+                        session["manager_role"] = "superadmin"
+                        session["manager_user_email"] = email
+                        flash("Welcome Super Admin!", "success")
+                        return redirect(url_for("dashboard"))
+                except Exception as e:
+                    flash(f"Firebase Auth failed: {e}", "danger")
             return redirect(url_for("dashboard"), code=307)
         return redirect(url_for("dashboard", **request.args))
 

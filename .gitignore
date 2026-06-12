@@ -11,3 +11,4 @@ data/*.db
 terminals/
 mcps/
 .cursor/
+firebase-adminsdk.json
